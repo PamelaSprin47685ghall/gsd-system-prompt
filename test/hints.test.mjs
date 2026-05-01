@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import { test, describe, mock, afterEach } from "node:test";
 import fs from "node:fs";
 import { buildStablePrompt } from "../src/inject.js";
-import { _resetCache } from "../src/fs.js";
 
 function mockReadFile(returns) {
-  mock.method(fs, "readFileSync", (p, enc) => {
+  mock.method(fs, "readFileSync", () => {
     if (returns === "ENOENT") {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     }
@@ -13,17 +12,12 @@ function mockReadFile(returns) {
   });
 }
 
-function stubListing(dir) {
-  return "   123.0M  src/\n     4.0K  package.json";
-}
-
 describe("buildStablePrompt", () => {
   afterEach(() => {
     mock.restoreAll();
-    _resetCache();
   });
 
-  test("剥掉 CODEBASE 段，追加 HINTS 和 listing", () => {
+  test("剥掉 CODEBASE 段，追加稳定 HINTS，不追加 du listing", () => {
     mockReadFile("global: test hints\nproject: more hints");
 
     const input = [
@@ -40,22 +34,20 @@ describe("buildStablePrompt", () => {
       "end of prompt",
     ].join("\n");
 
-    const result = buildStablePrompt(input, stubListing);
+    const result = buildStablePrompt(input);
 
     assert.ok(!result.systemPrompt.includes("PROJECT CODEBASE"), "CODEBASE block should be removed");
     assert.ok(!result.systemPrompt.includes("this should be removed"), "CODEBASE content should be removed");
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(result.systemPrompt.includes("$ du -hxd1"));
+    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
   });
 
-  test("从 Current working directory 行提取 cwd", () => {
-    mockReadFile("global content");
-
-    let capturedDir;
-    const tracker = (dir) => {
-      capturedDir = dir;
-      return stubListing(dir);
-    };
+  test("从 Current working directory 行提取 cwd 用于 project HINTS", () => {
+    const paths = [];
+    mock.method(fs, "readFileSync", (p) => {
+      paths.push(p);
+      return "global content";
+    });
 
     const input = [
       "# prompt",
@@ -63,8 +55,8 @@ describe("buildStablePrompt", () => {
       "some content",
     ].join("\n");
 
-    buildStablePrompt(input, tracker);
-    assert.equal(capturedDir, "/custom/path");
+    buildStablePrompt(input);
+    assert.ok(paths.includes("/custom/path/.gsd/HINTS.md"));
   });
 
   test("无 CODEBASE 段时保留原内容并追加 HINTS", () => {
@@ -72,22 +64,20 @@ describe("buildStablePrompt", () => {
 
     const input = "# just a simple prompt\nsome content";
 
-    const result = buildStablePrompt(input, () => "dummy listing");
+    const result = buildStablePrompt(input);
 
     assert.ok(result.systemPrompt.includes("# just a simple prompt"));
     assert.ok(result.systemPrompt.includes("some content"));
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(result.systemPrompt.includes("$ du -hxd1"));
+    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
   });
 
   test("worktree override 路径优先", () => {
-    mockReadFile("global hints");
-
-    let capturedDir;
-    const tracker = (dir) => {
-      capturedDir = dir;
-      return stubListing(dir);
-    };
+    const paths = [];
+    mock.method(fs, "readFileSync", (p) => {
+      paths.push(p);
+      return "global hints";
+    });
 
     const input = [
       "# prompt",
@@ -96,34 +86,16 @@ describe("buildStablePrompt", () => {
       "content",
     ].join("\n");
 
-    buildStablePrompt(input, tracker);
-    assert.equal(capturedDir, "/worktree/path");
+    buildStablePrompt(input);
+    assert.ok(paths.includes("/worktree/path/.gsd/HINTS.md"));
+    assert.ok(!paths.includes("/normal/path/.gsd/HINTS.md"));
   });
 
-  test("generateFileListing 未提供时不输出 $ du -hxd1", () => {
-    mockReadFile("global content");
-
-    const input = "# prompt only";
-    const result = buildStablePrompt(input, undefined);
-
-    assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
-  });
-
-  test("generateFileListing 返回空时不输出 $ du -hxd1", () => {
-    mockReadFile("global content");
-
-    const input = "# prompt only";
-    const result = buildStablePrompt(input, () => "");
-
-    assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
-  });
 
   test("systemPrompt 为空字符串时正常处理", () => {
     mockReadFile("global only");
 
-    const result = buildStablePrompt("", () => "");
+    const result = buildStablePrompt("");
 
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
   });

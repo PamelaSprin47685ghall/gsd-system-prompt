@@ -61,9 +61,9 @@ export function buildHintsBlock(cwd) {
 }
 
 /**
- * Rebuild system prompt: strip CODEBASE, inject HINTS + file listing.
+ * Rebuild system prompt: strip CODEBASE and inject stable HINTS.
  */
-export function buildStablePrompt(systemPrompt, generateFileListing) {
+export function buildStablePrompt(systemPrompt) {
   const errors = [];
 
   // Phase 1: strip [PROJECT CODEBASE — ...] section
@@ -112,14 +112,6 @@ export function buildStablePrompt(systemPrompt, generateFileListing) {
   let result = cleaned;
   if (result && !result.endsWith("\n")) result += "\n";
   result += hintsBlock;
-
-  // Phase 4: append file listing
-  if (generateFileListing) {
-    const listing = generateFileListing(cwd);
-    if (listing) {
-      result += "\n$ du -hxd1\n" + listing + "\n";
-    }
-  }
 
   return { systemPrompt: result, errors };
 }

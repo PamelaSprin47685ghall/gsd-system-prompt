@@ -1,7 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildStablePrompt, loadHintSources, buildHintsBlock } from "./src/inject.js";
-import { generateFileListing } from "./src/fs.js";
 
 /* ── self-injection into subagent env ── */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,7 +91,7 @@ export default function systemPromptPlugin(pi) {
     const sp = event?.systemPrompt;
     if (typeof sp !== "string") return;
 
-    const result = buildStablePrompt(sp, generateFileListing);
+    const result = buildStablePrompt(sp);
     if (result.systemPrompt === sp) return;
 
     if (result.errors.length > 0 && ctx?.ui) {
@@ -134,5 +133,4 @@ export default function systemPromptPlugin(pi) {
 }
 
 /* ── named exports ── */
-export { generateFileListing } from "./src/fs.js";
 export { loadHintSources, buildHintsBlock } from "./src/inject.js";
