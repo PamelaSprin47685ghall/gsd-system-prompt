@@ -20,7 +20,7 @@ if (!bundled.includes(__dirname)) {
  */
 function modelName(payload) {
   if (payload && typeof payload.model === "string") {
-    return payload.model.toLowerCase();
+    return payload.model;
   }
   return "";
 }
