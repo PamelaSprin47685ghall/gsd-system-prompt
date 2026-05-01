@@ -26,10 +26,10 @@ function modelName(payload) {
 }
 
 /**
- * Check if a model string matches deepseek or k2.6.
+ * Check if a model string matches deepseek or K2.6.
  */
 function isReasoningModel(model) {
-  return model.includes("deepseek") || model.includes("k2.6");
+  return model.includes("deepseek") || model.includes("K2.6");
 }
 
 /**
