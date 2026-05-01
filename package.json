@@ -1,0 +1,11 @@
+{
+  "name": "gsd-system-prompt",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./index.js",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "gsd": { "extension": true },
+  "pi": { "extensions": ["index.js"] }
+}
