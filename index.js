@@ -57,7 +57,7 @@ function injectReasoning(msg) {
  * Process before_provider_request for Responses API: strip prompt_cache_key.
  */
 function handleResponsesPayload(payload) {
-  // strip prompt_cache_key only
+  if (!("prompt_cache_key" in payload)) return payload;
   const { prompt_cache_key, ...rest } = payload;
   return rest;
 }

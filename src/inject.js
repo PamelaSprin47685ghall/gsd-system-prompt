@@ -86,6 +86,10 @@ export function buildStablePrompt(systemPrompt) {
 
   let cleaned = kept.join("\n");
 
+  if (cleaned.includes("[HINTS — Stable Guidance]")) {
+    return { systemPrompt: cleaned, errors };
+  }
+
   // Phase 2: extract working directory
   let cwd = process.cwd();
   for (const line of lines) {

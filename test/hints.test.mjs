@@ -99,4 +99,40 @@ describe("buildStablePrompt", () => {
 
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
   });
+
+  test("幂等快照：同一输入连续执行两次输出一致", () => {
+    process.env.GSD_HOME = "/tmp/gsd-home";
+    mockReadFile("hint content");
+
+    const input = [
+      "system prompt start",
+      "Current working directory: /custom/path",
+      "[SYSTEM CONTEXT — GSD]",
+      "context body",
+    ].join("\n");
+
+    const first = buildStablePrompt(input).systemPrompt;
+    const second = buildStablePrompt(first).systemPrompt;
+
+    const expected = [
+      "system prompt start",
+      "Current working directory: /custom/path",
+      "[SYSTEM CONTEXT — GSD]",
+      "context body",
+      "[HINTS — Stable Guidance]",
+      "",
+      "These instructions come from HINTS.md files and are intentionally injected into the stable system prompt.",
+      "",
+      "## Global HINTS (/tmp/gsd-home/HINTS.md)",
+      "",
+      "hint content",
+      "",
+      "## Project HINTS (/custom/path/.gsd/HINTS.md)",
+      "",
+      "hint content",
+    ].join("\n");
+
+    assert.equal(first, expected);
+    assert.equal(second, expected);
+  });
 });
