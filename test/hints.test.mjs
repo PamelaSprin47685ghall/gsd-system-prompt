@@ -17,7 +17,7 @@ describe("buildStablePrompt", () => {
     mock.restoreAll();
   });
 
-  test("剥掉 CODEBASE 段和动态行，追加稳定 HINTS", () => {
+  test("剥掉 CODEBASE 段，保留动态行，追加稳定 HINTS", () => {
     mockReadFile("global: test hints\nproject: more hints");
 
     const input = [
@@ -39,28 +39,11 @@ describe("buildStablePrompt", () => {
 
     assert.ok(!result.systemPrompt.includes("PROJECT CODEBASE"), "CODEBASE block should be removed");
     assert.ok(!result.systemPrompt.includes("this should be removed"), "CODEBASE content should be removed");
-    assert.ok(!result.systemPrompt.includes("Current working directory:"), "cwd line should be stripped");
-    assert.ok(!result.systemPrompt.includes("Current date and time:"), "date line should be stripped");
+    // Dynamic lines are now preserved (not stripped)
+    assert.ok(result.systemPrompt.includes("Current working directory:"), "cwd line should be preserved");
+    assert.ok(result.systemPrompt.includes("Current date and time:"), "date line should be preserved");
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(Array.isArray(result.dynamicLines), "should return dynamicLines array");
-    assert.equal(result.dynamicLines.length, 2, "should extract 2 dynamic lines");
-  });
-
-  test("从 Current working directory 行提取 cwd 用于 project HINTS", () => {
-    const paths = [];
-    mock.method(fs, "readFileSync", (p) => {
-      paths.push(p);
-      return "global content";
-    });
-
-    const input = [
-      "# prompt",
-      "Current working directory: /custom/path",
-      "some content",
-    ].join("\n");
-
-    buildStablePrompt(input);
-    assert.ok(paths.includes("/custom/path/.gsd/HINTS.md"));
+    assert.ok(!("dynamicLines" in result), "should not return dynamicLines");
   });
 
   test("无 CODEBASE 段时保留原内容并追加 HINTS", () => {
@@ -73,28 +56,7 @@ describe("buildStablePrompt", () => {
     assert.ok(result.systemPrompt.includes("# just a simple prompt"));
     assert.ok(result.systemPrompt.includes("some content"));
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
   });
-
-  test("worktree override 路径优先", () => {
-    const paths = [];
-    mock.method(fs, "readFileSync", (p) => {
-      paths.push(p);
-      return "global hints";
-    });
-
-    const input = [
-      "# prompt",
-      "Current working directory: /normal/path",
-      "The actual current working directory is: /worktree/path",
-      "content",
-    ].join("\n");
-
-    buildStablePrompt(input);
-    assert.ok(paths.includes("/worktree/path/.gsd/HINTS.md"));
-    assert.ok(!paths.includes("/normal/path/.gsd/HINTS.md"));
-  });
-
 
   test("systemPrompt 为空字符串时正常处理", () => {
     mockReadFile("global only");
@@ -104,7 +66,7 @@ describe("buildStablePrompt", () => {
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
   });
 
-  test("幂等快照：同一输入连续执行两次输出一致", () => {
+  test("幂等：已有 HINTS 时直接返回", () => {
     process.env.GSD_HOME = "/tmp/gsd-home";
     mockReadFile("hint content");
 
@@ -118,26 +80,11 @@ describe("buildStablePrompt", () => {
     const first = buildStablePrompt(input);
     const second = buildStablePrompt(first.systemPrompt);
 
-    const expectedPrompt = [
-      "system prompt start",
-      "[SYSTEM CONTEXT — GSD]",
-      "context body",
-      "[HINTS — Stable Guidance]",
-      "",
-      "These instructions come from HINTS.md files and are intentionally injected into the stable system prompt.",
-      "",
-      "## Global HINTS (/tmp/gsd-home/HINTS.md)",
-      "",
-      "hint content",
-      "",
-      "## Project HINTS (/custom/path/.gsd/HINTS.md)",
-      "",
-      "hint content",
-    ].join("\n");
-
-    assert.equal(first.systemPrompt, expectedPrompt);
-    assert.equal(second.systemPrompt, expectedPrompt);
-    assert.deepEqual(first.dynamicLines, ["Current working directory: /custom/path"]);
-    assert.deepEqual(second.dynamicLines, []);
+    // still has dynamic lines, has HINTS
+    assert.ok(!first.systemPrompt.includes("PROJECT CODEBASE"));
+    assert.ok(first.systemPrompt.includes("Current working directory: /custom/path"));
+    assert.ok(first.systemPrompt.includes("[HINTS — Stable Guidance]"));
+    // second call: HINTS already present, returns as-is
+    assert.equal(first.systemPrompt, second.systemPrompt);
   });
 });

@@ -61,46 +61,12 @@ export function buildHintsBlock(cwd) {
 }
 
 /**
- * Extract and strip dynamic lines from system prompt.
- * Returns { cleaned, dynamicLines, cwd }.
- */
-function extractDynamicContent(systemPrompt) {
-  const lines = systemPrompt.split("\n");
-  const dynamicLines = [];
-  const kept = [];
-  let cwd = process.cwd();
-
-  for (const line of lines) {
-    // Match dynamic patterns
-    if (line.match(/^Current date and time:/)) {
-      dynamicLines.push(line);
-      continue;
-    }
-    if (line.match(/^Current working directory:/)) {
-      dynamicLines.push(line);
-      const m = line.match(/^Current working directory: (.+)/);
-      if (m) cwd = m[1].trim();
-      continue;
-    }
-    if (line.match(/^The actual current working directory is:/)) {
-      dynamicLines.push(line);
-      const m = line.match(/^The actual current working directory is: (.+)/);
-      if (m) cwd = m[1].trim();
-      continue;
-    }
-    kept.push(line);
-  }
-
-  return { cleaned: kept.join("\n"), dynamicLines, cwd };
-}
-
-/**
- * Rebuild system prompt: strip CODEBASE and dynamic content, inject stable HINTS.
+ * Rebuild system prompt: strip CODEBASE section, inject stable HINTS.
  */
 export function buildStablePrompt(systemPrompt) {
   const errors = [];
 
-  // Phase 1: strip [PROJECT CODEBASE — ...] section
+  // Strip [PROJECT CODEBASE — ...] section
   const lines = systemPrompt.split("\n");
   const kept = [];
   let skipping = false;
@@ -120,20 +86,18 @@ export function buildStablePrompt(systemPrompt) {
 
   let cleaned = kept.join("\n");
 
+  // If HINTS already injected, return as-is
   if (cleaned.includes("[HINTS — Stable Guidance]")) {
-    return { systemPrompt: cleaned, dynamicLines: [], errors };
+    return { systemPrompt: cleaned, errors };
   }
 
-  // Phase 2: extract and strip dynamic content
-  const { cleaned: stable, dynamicLines, cwd } = extractDynamicContent(cleaned);
-
-  // Phase 3: append HINTS block
-  const { block: hintsBlock, errors: hintsErrors } = buildHintsBlock(cwd);
+  // Append HINTS block
+  const { block: hintsBlock, errors: hintsErrors } = buildHintsBlock(process.cwd());
   errors.push(...hintsErrors);
 
-  let result = stable;
+  let result = cleaned;
   if (result && !result.endsWith("\n")) result += "\n";
   result += hintsBlock;
 
-  return { systemPrompt: result, dynamicLines, errors };
+  return { systemPrompt: result, errors };
 }

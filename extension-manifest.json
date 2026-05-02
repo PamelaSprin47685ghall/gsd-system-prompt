@@ -1,9 +1,9 @@
 {
   "id": "system-prompt",
-  "name": "System Prompt Optimizer + Provider Adapter",
-  "version": "1.0.0",
-  "description": "Strips CODEBASE from system prompt and injects stable HINTS for prefix cache hits. Patches reasoning_content for DeepSeek/K2.6, strips prompt_cache_key on Responses API.",
+  "name": "System Prompt Pruner + Provider Adapter",
+  "version": "2.0.0",
+  "description": "Strips CODEBASE from system prompt, injects stable HINTS for prefix cache hits, patches reasoning_content for DeepSeek/K2.6.",
   "tier": "community",
   "requires": { "platform": ">=2.29.0" },
-  "provides": { "hooks": ["before_agent_start", "context", "before_provider_request"] }
+  "provides": { "hooks": ["before_agent_start", "before_provider_request"] }
 }

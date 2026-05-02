@@ -26,7 +26,6 @@ describe("plugin registration", () => {
     const pi = { on: (name, fn) => events.push({ name, fn }) };
     systemPromptPlugin(pi);
     const found = events.find(e => e.name === "context");
-    assert.ok(found, "context hook should be registered");
-    assert.equal(typeof found.fn, "function");
+    assert.equal(found, undefined, "context hook should NOT be registered");
   });
 });

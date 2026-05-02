@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildStablePrompt, loadHintSources, buildHintsBlock } from "./src/inject.js";
+import { buildStablePrompt } from "./src/inject.js";
 
 /* ── self-injection into subagent env ── */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,10 +13,6 @@ if (!bundled.includes(__dirname)) {
 
 /* ── helpers ── */
 
-/**
- * Extract model name from payload, lowercased.
- * Returns empty string if unavailable.
- */
 function modelName(payload) {
   if (payload && typeof payload.model === "string") {
     return payload.model;
@@ -24,17 +20,10 @@ function modelName(payload) {
   return "";
 }
 
-/**
- * Check if a model string matches deepseek or K2.6.
- */
 function isReasoningModel(model) {
   return model.includes("deepseek") || model.includes("K2.6");
 }
 
-/**
- * Clone a message and inject reasoning_content from its thinking block(s).
- * Skips if the message already has reasoning_content or is role===user.
- */
 function injectReasoning(msg) {
   if (msg.role === "user") return msg;
   if ("reasoning_content" in msg) return msg;
@@ -53,18 +42,6 @@ function injectReasoning(msg) {
   return { ...msg, reasoning_content: reasoning };
 }
 
-/**
- * Process before_provider_request for Responses API: strip prompt_cache_key.
- */
-function handleResponsesPayload(payload) {
-  if (!("prompt_cache_key" in payload)) return payload;
-  const { prompt_cache_key, ...rest } = payload;
-  return rest;
-}
-
-/**
- * Process before_provider_request: inject reasoning_content for deepseek/k2.6.
- */
 function handleReasoningPayload(payload) {
   const messagesKey = "input" in payload ? "input" : "messages" in payload ? "messages" : null;
   if (!messagesKey) return payload;
@@ -85,20 +62,14 @@ function handleReasoningPayload(payload) {
 
 /* ── plugin entry ── */
 
-// Store extracted dynamic lines for injection
-let cachedDynamicLines = [];
-
 export default function systemPromptPlugin(pi) {
-  /* before_agent_start ── restructure system prompt */
+  /* before_agent_start ── strip CODEBASE, inject HINTS */
   pi.on("before_agent_start", (event, ctx) => {
     const sp = event?.systemPrompt;
     if (typeof sp !== "string") return;
 
     const result = buildStablePrompt(sp);
     if (result.systemPrompt === sp) return;
-
-    // Cache dynamic lines for later injection
-    cachedDynamicLines = result.dynamicLines || [];
 
     if (result.errors.length > 0 && ctx?.ui) {
       ctx.ui.notify(`pruner: HINTS 加载警告 — ${result.errors.join("; ")}`, "warning");
@@ -107,60 +78,18 @@ export default function systemPromptPlugin(pi) {
     return { systemPrompt: result.systemPrompt };
   });
 
-  /* context ── inject dynamic content as first system message */
-  pi.on("context", (event) => {
-    const messages = Array.isArray(event?.messages) ? event.messages : [];
-    
-    if (cachedDynamicLines.length === 0) {
-      return { messages };
-    }
-
-    // Check if first message is already our injected context (idempotent)
-    const hasContextMsg = messages.length > 0 && 
-      messages[0].role === "system" &&
-      messages[0].content?.includes("Current working directory:");
-    
-    if (hasContextMsg) {
-      return { messages };
-    }
-
-    // Inject dynamic context as first system message
-    const contextMsg = {
-      role: "system",
-      content: cachedDynamicLines.join("\n")
-    };
-
-    return { messages: [contextMsg, ...messages] };
-  });
-
-  /* before_provider_request ── adapter fixes */
+  /* before_provider_request ── reasoning_content fix for deepseek/k2.6 */
   pi.on("before_provider_request", (event) => {
     const p = event?.payload;
     if (!p) return undefined;
 
-    let payload = p;
-    let changed = false;
-
-    // 1. Responses API: strip prompt_cache_key
-    if ("input" in payload) {
-      const handled = handleResponsesPayload(payload);
-      if (handled !== payload) {
-        payload = handled;
-        changed = true;
-      }
-    }
-
-    // 2. reasoning_content fix for deepseek / k2.6
-    const model = modelName(payload);
+    const model = modelName(p);
     if (model && isReasoningModel(model)) {
-      const handled = handleReasoningPayload(payload);
-      if (handled !== payload) {
-        payload = handled;
-        changed = true;
-      }
+      const handled = handleReasoningPayload(p);
+      return handled !== p ? handled : p;
     }
 
-    return changed ? payload : p;
+    return p;
   });
 }
 

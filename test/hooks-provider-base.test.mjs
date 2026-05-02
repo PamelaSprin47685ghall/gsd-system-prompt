@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import { test, describe } from "node:test";
 import systemPromptPlugin from "../index.js";
 
-/**
- * Helper: capture handlers from plugin registration.
- */
 function captureHandlers() {
   const handlers = {};
   const pi = {
@@ -26,38 +23,6 @@ describe("before_provider_request", () => {
     assert.equal(result.model, "gpt-4");
     assert.equal(result.store, true);
     assert.ok(Array.isArray(result.messages));
-  });
-
-  test("Responses API 保留字段和消息 ID", () => {
-    const h = captureHandlers();
-    const event = {
-      payload: { model: "gpt-4", input: [{ id: "msg1", role: "user", content: "hi" }] },
-    };
-    const result = h.before_provider_request(event);
-    assert.ok(Array.isArray(result.input));
-    assert.equal(result.input[0].id, "msg1");
-    assert.equal(result.input[0].role, "user");
-  });
-
-  test("Responses API 剥离 prompt_cache_key", () => {
-    const h = captureHandlers();
-    const event = {
-      payload: { model: "gpt-4", prompt_cache_key: "cache_abc", input: [] },
-    };
-    const result = h.before_provider_request(event);
-    assert.equal("prompt_cache_key" in result, false);
-    assert.ok(Array.isArray(result.input));
-    assert.equal(result.model, "gpt-4");
-  });
-
-  test("Messages API 保留 prompt_cache_key", () => {
-    const h = captureHandlers();
-    const event = {
-      payload: { model: "gpt-4", prompt_cache_key: "cache_abc", messages: [] },
-    };
-    const result = h.before_provider_request(event);
-    assert.equal("prompt_cache_key" in result, true);
-    assert.equal(result.prompt_cache_key, "cache_abc");
   });
 
   test("DeepSeek：为所有非 user 消息注入 reasoning_content", () => {
@@ -125,7 +90,6 @@ describe("before_provider_request", () => {
       },
     };
     const result = h.before_provider_request(event);
-    // should preserve the original value
     assert.equal(result.messages[0].reasoning_content, "已有思考");
   });
 
@@ -138,9 +102,7 @@ describe("before_provider_request", () => {
     const event = {
       payload: { model: "deepseek-chat", messages: original },
     };
-    // call handler
     h.before_provider_request(event);
-    // original[1] should NOT have reasoning_content
     assert.equal("reasoning_content" in original[1], false);
   });
 
@@ -169,85 +131,5 @@ describe("before_provider_request", () => {
     const event = { payload: { model: "deepseek-chat" } };
     const result = h.before_provider_request(event);
     assert.equal(result.model, "deepseek-chat");
-  });
-});
-
-describe("context hook", () => {
-  test("注入动态上下文为首条 system 消息", () => {
-    const h = captureHandlers();
-    // Simulate before_agent_start extracting dynamic lines
-    const agentEvent = {
-      systemPrompt: [
-        "prompt start",
-        "Current working directory: /test/path",
-        "Current date and time: 2025-01-01 12:00",
-        "content",
-      ].join("\n"),
-    };
-    h.before_agent_start(agentEvent);
-
-    // Now context hook should inject
-    const contextEvent = {
-      messages: [{ role: "user", content: "hello" }],
-    };
-    const result = h.context(contextEvent);
-
-    assert.equal(result.messages.length, 2);
-    assert.equal(result.messages[0].role, "system");
-    assert.ok(result.messages[0].content.includes("Current working directory: /test/path"));
-    assert.ok(result.messages[0].content.includes("Current date and time: 2025-01-01 12:00"));
-    assert.equal(result.messages[1].role, "user");
-  });
-
-  test("幂等：已存在动态上下文消息时不重复注入", () => {
-    const h = captureHandlers();
-    const agentEvent = {
-      systemPrompt: "Current working directory: /path\ncontent",
-    };
-    h.before_agent_start(agentEvent);
-
-    const contextEvent = {
-      messages: [
-        { role: "system", content: "Current working directory: /path" },
-        { role: "user", content: "hello" },
-      ],
-    };
-    const result = h.context(contextEvent);
-
-    // Should not inject again
-    assert.equal(result.messages.length, 2);
-    assert.equal(result.messages[0].role, "system");
-    assert.equal(result.messages[1].role, "user");
-  });
-
-  test("无动态内容时返回原 messages", () => {
-    const h = captureHandlers();
-    const agentEvent = {
-      systemPrompt: "static prompt only",
-    };
-    h.before_agent_start(agentEvent);
-
-    const contextEvent = {
-      messages: [{ role: "user", content: "hello" }],
-    };
-    const result = h.context(contextEvent);
-
-    assert.equal(result.messages.length, 1);
-    assert.equal(result.messages[0].role, "user");
-  });
-
-  test("空 messages 数组时正常注入", () => {
-    const h = captureHandlers();
-    const agentEvent = {
-      systemPrompt: "Current working directory: /empty\ncontent",
-    };
-    h.before_agent_start(agentEvent);
-
-    const contextEvent = { messages: [] };
-    const result = h.context(contextEvent);
-
-    assert.equal(result.messages.length, 1);
-    assert.equal(result.messages[0].role, "system");
-    assert.ok(result.messages[0].content.includes("Current working directory: /empty"));
   });
 });
