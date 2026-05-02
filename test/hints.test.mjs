@@ -17,12 +17,13 @@ describe("buildStablePrompt", () => {
     mock.restoreAll();
   });
 
-  test("剥掉 CODEBASE 段，追加稳定 HINTS，不追加 du listing", () => {
+  test("剥掉 CODEBASE 段和动态行，追加稳定 HINTS", () => {
     mockReadFile("global: test hints\nproject: more hints");
 
     const input = [
       "system prompt start",
       "Current working directory: /fake/path",
+      "Current date and time: 2025-01-01 12:00",
       "",
       "[SYSTEM CONTEXT — GSD]",
       "some context",
@@ -38,8 +39,11 @@ describe("buildStablePrompt", () => {
 
     assert.ok(!result.systemPrompt.includes("PROJECT CODEBASE"), "CODEBASE block should be removed");
     assert.ok(!result.systemPrompt.includes("this should be removed"), "CODEBASE content should be removed");
+    assert.ok(!result.systemPrompt.includes("Current working directory:"), "cwd line should be stripped");
+    assert.ok(!result.systemPrompt.includes("Current date and time:"), "date line should be stripped");
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
-    assert.ok(!result.systemPrompt.includes("$ du -hxd1"));
+    assert.ok(Array.isArray(result.dynamicLines), "should return dynamicLines array");
+    assert.equal(result.dynamicLines.length, 2, "should extract 2 dynamic lines");
   });
 
   test("从 Current working directory 行提取 cwd 用于 project HINTS", () => {
@@ -111,12 +115,11 @@ describe("buildStablePrompt", () => {
       "context body",
     ].join("\n");
 
-    const first = buildStablePrompt(input).systemPrompt;
-    const second = buildStablePrompt(first).systemPrompt;
+    const first = buildStablePrompt(input);
+    const second = buildStablePrompt(first.systemPrompt);
 
-    const expected = [
+    const expectedPrompt = [
       "system prompt start",
-      "Current working directory: /custom/path",
       "[SYSTEM CONTEXT — GSD]",
       "context body",
       "[HINTS — Stable Guidance]",
@@ -132,7 +135,9 @@ describe("buildStablePrompt", () => {
       "hint content",
     ].join("\n");
 
-    assert.equal(first, expected);
-    assert.equal(second, expected);
+    assert.equal(first.systemPrompt, expectedPrompt);
+    assert.equal(second.systemPrompt, expectedPrompt);
+    assert.deepEqual(first.dynamicLines, ["Current working directory: /custom/path"]);
+    assert.deepEqual(second.dynamicLines, []);
   });
 });

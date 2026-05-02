@@ -85,6 +85,9 @@ function handleReasoningPayload(payload) {
 
 /* ── plugin entry ── */
 
+// Store extracted dynamic lines for injection
+let cachedDynamicLines = [];
+
 export default function systemPromptPlugin(pi) {
   /* before_agent_start ── restructure system prompt */
   pi.on("before_agent_start", (event, ctx) => {
@@ -94,11 +97,40 @@ export default function systemPromptPlugin(pi) {
     const result = buildStablePrompt(sp);
     if (result.systemPrompt === sp) return;
 
+    // Cache dynamic lines for later injection
+    cachedDynamicLines = result.dynamicLines || [];
+
     if (result.errors.length > 0 && ctx?.ui) {
       ctx.ui.notify(`pruner: HINTS 加载警告 — ${result.errors.join("; ")}`, "warning");
     }
 
     return { systemPrompt: result.systemPrompt };
+  });
+
+  /* context ── inject dynamic content as first system message */
+  pi.on("context", (event) => {
+    const messages = Array.isArray(event?.messages) ? event.messages : [];
+    
+    if (cachedDynamicLines.length === 0) {
+      return { messages };
+    }
+
+    // Check if first message is already our injected context (idempotent)
+    const hasContextMsg = messages.length > 0 && 
+      messages[0].role === "system" &&
+      messages[0].content?.includes("Current working directory:");
+    
+    if (hasContextMsg) {
+      return { messages };
+    }
+
+    // Inject dynamic context as first system message
+    const contextMsg = {
+      role: "system",
+      content: cachedDynamicLines.join("\n")
+    };
+
+    return { messages: [contextMsg, ...messages] };
   });
 
   /* before_provider_request ── adapter fixes */

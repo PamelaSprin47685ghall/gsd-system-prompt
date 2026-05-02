@@ -61,7 +61,41 @@ export function buildHintsBlock(cwd) {
 }
 
 /**
- * Rebuild system prompt: strip CODEBASE and inject stable HINTS.
+ * Extract and strip dynamic lines from system prompt.
+ * Returns { cleaned, dynamicLines, cwd }.
+ */
+function extractDynamicContent(systemPrompt) {
+  const lines = systemPrompt.split("\n");
+  const dynamicLines = [];
+  const kept = [];
+  let cwd = process.cwd();
+
+  for (const line of lines) {
+    // Match dynamic patterns
+    if (line.match(/^Current date and time:/)) {
+      dynamicLines.push(line);
+      continue;
+    }
+    if (line.match(/^Current working directory:/)) {
+      dynamicLines.push(line);
+      const m = line.match(/^Current working directory: (.+)/);
+      if (m) cwd = m[1].trim();
+      continue;
+    }
+    if (line.match(/^The actual current working directory is:/)) {
+      dynamicLines.push(line);
+      const m = line.match(/^The actual current working directory is: (.+)/);
+      if (m) cwd = m[1].trim();
+      continue;
+    }
+    kept.push(line);
+  }
+
+  return { cleaned: kept.join("\n"), dynamicLines, cwd };
+}
+
+/**
+ * Rebuild system prompt: strip CODEBASE and dynamic content, inject stable HINTS.
  */
 export function buildStablePrompt(systemPrompt) {
   const errors = [];
@@ -87,35 +121,19 @@ export function buildStablePrompt(systemPrompt) {
   let cleaned = kept.join("\n");
 
   if (cleaned.includes("[HINTS — Stable Guidance]")) {
-    return { systemPrompt: cleaned, errors };
+    return { systemPrompt: cleaned, dynamicLines: [], errors };
   }
 
-  // Phase 2: extract working directory
-  let cwd = process.cwd();
-  for (const line of lines) {
-    const wtMatch = line.match(/^The actual current working directory is: (.+)/);
-    if (wtMatch) {
-      cwd = wtMatch[1].trim();
-      break;
-    }
-  }
-  if (cwd === process.cwd()) {
-    for (const line of lines) {
-      const cwdMatch = line.match(/^Current working directory: (.+)/);
-      if (cwdMatch) {
-        cwd = cwdMatch[1].trim();
-        break;
-      }
-    }
-  }
+  // Phase 2: extract and strip dynamic content
+  const { cleaned: stable, dynamicLines, cwd } = extractDynamicContent(cleaned);
 
   // Phase 3: append HINTS block
   const { block: hintsBlock, errors: hintsErrors } = buildHintsBlock(cwd);
   errors.push(...hintsErrors);
 
-  let result = cleaned;
+  let result = stable;
   if (result && !result.endsWith("\n")) result += "\n";
   result += hintsBlock;
 
-  return { systemPrompt: result, errors };
+  return { systemPrompt: result, dynamicLines, errors };
 }

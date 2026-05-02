@@ -171,3 +171,83 @@ describe("before_provider_request", () => {
     assert.equal(result.model, "deepseek-chat");
   });
 });
+
+describe("context hook", () => {
+  test("注入动态上下文为首条 system 消息", () => {
+    const h = captureHandlers();
+    // Simulate before_agent_start extracting dynamic lines
+    const agentEvent = {
+      systemPrompt: [
+        "prompt start",
+        "Current working directory: /test/path",
+        "Current date and time: 2025-01-01 12:00",
+        "content",
+      ].join("\n"),
+    };
+    h.before_agent_start(agentEvent);
+
+    // Now context hook should inject
+    const contextEvent = {
+      messages: [{ role: "user", content: "hello" }],
+    };
+    const result = h.context(contextEvent);
+
+    assert.equal(result.messages.length, 2);
+    assert.equal(result.messages[0].role, "system");
+    assert.ok(result.messages[0].content.includes("Current working directory: /test/path"));
+    assert.ok(result.messages[0].content.includes("Current date and time: 2025-01-01 12:00"));
+    assert.equal(result.messages[1].role, "user");
+  });
+
+  test("幂等：已存在动态上下文消息时不重复注入", () => {
+    const h = captureHandlers();
+    const agentEvent = {
+      systemPrompt: "Current working directory: /path\ncontent",
+    };
+    h.before_agent_start(agentEvent);
+
+    const contextEvent = {
+      messages: [
+        { role: "system", content: "Current working directory: /path" },
+        { role: "user", content: "hello" },
+      ],
+    };
+    const result = h.context(contextEvent);
+
+    // Should not inject again
+    assert.equal(result.messages.length, 2);
+    assert.equal(result.messages[0].role, "system");
+    assert.equal(result.messages[1].role, "user");
+  });
+
+  test("无动态内容时返回原 messages", () => {
+    const h = captureHandlers();
+    const agentEvent = {
+      systemPrompt: "static prompt only",
+    };
+    h.before_agent_start(agentEvent);
+
+    const contextEvent = {
+      messages: [{ role: "user", content: "hello" }],
+    };
+    const result = h.context(contextEvent);
+
+    assert.equal(result.messages.length, 1);
+    assert.equal(result.messages[0].role, "user");
+  });
+
+  test("空 messages 数组时正常注入", () => {
+    const h = captureHandlers();
+    const agentEvent = {
+      systemPrompt: "Current working directory: /empty\ncontent",
+    };
+    h.before_agent_start(agentEvent);
+
+    const contextEvent = { messages: [] };
+    const result = h.context(contextEvent);
+
+    assert.equal(result.messages.length, 1);
+    assert.equal(result.messages[0].role, "system");
+    assert.ok(result.messages[0].content.includes("Current working directory: /empty"));
+  });
+});
