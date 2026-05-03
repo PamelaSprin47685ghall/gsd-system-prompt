@@ -1,11 +1,24 @@
 {
   "name": "gsd-system-prompt",
-  "version": "1.0.0",
+  "version": "5.1.0",
+  "description": "Stable system prompt pruning, HINTS injection, and provider payload adaptation for GSD and pi.",
   "type": "module",
   "exports": "./index.js",
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "gsd": { "extension": true },
-  "pi": { "extensions": ["index.js"] }
+  "keywords": [
+    "pi-package",
+    "gsd-extension",
+    "system-prompt",
+    "provider-adapter"
+  ],
+  "gsd": {
+    "extension": true
+  },
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
 }

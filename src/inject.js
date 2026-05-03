@@ -63,7 +63,7 @@ export function buildHintsBlock(cwd) {
 /**
  * Rebuild system prompt: strip CODEBASE section, inject stable HINTS.
  */
-export function buildStablePrompt(systemPrompt) {
+export function buildStablePrompt(systemPrompt, cwd = process.cwd()) {
   const errors = [];
 
   // Strip [PROJECT CODEBASE — ...] section
@@ -72,7 +72,7 @@ export function buildStablePrompt(systemPrompt) {
   let skipping = false;
 
   for (const line of lines) {
-    if (line.startsWith("[PROJECT CODEBASE —")) {
+    if (line.startsWith("[PROJECT CODEBASE —") || line === "## Codebase Map") {
       skipping = true;
       continue;
     }
@@ -92,7 +92,7 @@ export function buildStablePrompt(systemPrompt) {
   }
 
   // Append HINTS block
-  const { block: hintsBlock, errors: hintsErrors } = buildHintsBlock(process.cwd());
+  const { block: hintsBlock, errors: hintsErrors } = buildHintsBlock(cwd);
   errors.push(...hintsErrors);
 
   let result = cleaned;

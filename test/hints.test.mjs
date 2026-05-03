@@ -46,6 +46,24 @@ describe("buildStablePrompt", () => {
     assert.ok(!("dynamicLines" in result), "should not return dynamicLines");
   });
 
+  test("剥掉 markdown Codebase Map 段", () => {
+    mockReadFile("global only");
+
+    const input = [
+      "system prompt start",
+      "## Codebase Map",
+      "generated map should be removed",
+      "## GSD Skill Preferences",
+      "- keep this",
+    ].join("\n");
+
+    const result = buildStablePrompt(input);
+
+    assert.ok(!result.systemPrompt.includes("generated map should be removed"));
+    assert.ok(result.systemPrompt.includes("## GSD Skill Preferences"));
+    assert.ok(result.systemPrompt.includes("- keep this"));
+  });
+
   test("无 CODEBASE 段时保留原内容并追加 HINTS", () => {
     mockReadFile("global only");
 
@@ -64,6 +82,19 @@ describe("buildStablePrompt", () => {
     const result = buildStablePrompt("");
 
     assert.ok(result.systemPrompt.includes("[HINTS — Stable Guidance]"));
+  });
+
+  test("uses the caller cwd when loading project HINTS", () => {
+    const reads = [];
+    mock.method(fs, "readFileSync", filePath => {
+      reads.push(String(filePath));
+      return String(filePath).includes("/project/.gsd/HINTS.md") ? "project cwd hint" : "";
+    });
+
+    const result = buildStablePrompt("prompt", "/tmp/project");
+
+    assert.ok(reads.some(filePath => filePath === "/tmp/project/.gsd/HINTS.md"));
+    assert.ok(result.systemPrompt.includes("project cwd hint"));
   });
 
   test("幂等：已有 HINTS 时直接返回", () => {

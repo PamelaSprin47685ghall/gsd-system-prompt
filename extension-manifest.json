@@ -1,9 +1,16 @@
 {
   "id": "system-prompt",
-  "name": "System Prompt Pruner + Provider Adapter",
-  "version": "2.0.0",
-  "description": "Strips CODEBASE from system prompt, injects stable HINTS for prefix cache hits, patches reasoning_content for DeepSeek/K2.6.",
+  "name": "System Prompt",
+  "version": "5.1.0",
+  "description": "Stabilizes the system prompt, injects HINTS, prunes generated codebase blocks, and adapts reasoning payloads for selected providers.",
   "tier": "community",
-  "requires": { "platform": ">=2.29.0" },
-  "provides": { "hooks": ["before_agent_start", "before_provider_request"] }
+  "requires": {
+    "platform": ">=2.29.0"
+  },
+  "provides": {
+    "hooks": [
+      "before_agent_start",
+      "before_provider_request"
+    ]
+  }
 }

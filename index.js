@@ -1,17 +1,8 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ensureBundledExtensionPath } from "./src/self-injection.js";
 import { buildStablePrompt } from "./src/inject.js";
 
-/* ── self-injection into subagent env ── */
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const bundled = process.env.GSD_BUNDLED_EXTENSION_PATHS || "";
-if (!bundled.includes(__dirname)) {
-  process.env.GSD_BUNDLED_EXTENSION_PATHS = bundled
-    ? `${bundled}${path.delimiter}${__dirname}`
-    : __dirname;
-}
+ensureBundledExtensionPath(import.meta.url);
 
-/* ── helpers ── */
 
 function modelName(payload) {
   if (payload && typeof payload.model === "string") {
@@ -60,15 +51,20 @@ function handleReasoningPayload(payload) {
   return { ...payload, [messagesKey]: patched };
 }
 
+const registeredPluginApis = new WeakSet();
+
 /* ── plugin entry ── */
 
 export default function systemPromptPlugin(pi) {
+  if (registeredPluginApis.has(pi)) return;
+  registeredPluginApis.add(pi);
+
   /* before_agent_start ── strip CODEBASE, inject HINTS */
   pi.on("before_agent_start", (event, ctx) => {
     const sp = event?.systemPrompt;
     if (typeof sp !== "string") return;
 
-    const result = buildStablePrompt(sp);
+    const result = buildStablePrompt(sp, ctx?.cwd);
     if (result.systemPrompt === sp) return;
 
     if (result.errors.length > 0 && ctx?.ui) {
