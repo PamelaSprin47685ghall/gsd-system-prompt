@@ -121,6 +121,59 @@ describe("before_provider_request", () => {
     assert.equal("reasoning_content" in result.messages[0], false);
   });
 
+  test("GLM-5.1：提取 thinking block 并启用 clear_thinking: false", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "glm-5.1",
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "GLM 思考中" },
+              { type: "text", text: "答案" },
+            ],
+          },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal(result.messages[0].reasoning_content, "GLM 思考中");
+    assert.equal(result.messages[0].content.length, 1);
+    assert.equal(result.thinking.type, "enabled");
+    assert.equal(result.thinking.clear_thinking, false);
+  });
+
+  test("GLM-5.1：无 thinking block 时仍启用 clear_thinking: false", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "glm-5.1",
+        messages: [
+          { role: "assistant", content: [{ type: "text", text: "直接回答" }] },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal("reasoning_content" in result.messages[0], false);
+    assert.equal(result.thinking.type, "enabled");
+    assert.equal(result.thinking.clear_thinking, false);
+  });
+
+  test("GLM-4.5 不在补丁范围内", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "glm-4.5",
+        messages: [
+          { role: "assistant", content: [{ type: "thinking", thinking: "x" }] },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal("reasoning_content" in result.messages[0], false);
+  });
+
   test("payload 为 undefined 时返回 undefined", () => {
     const h = captureHandlers();
     const result = h.before_provider_request({});

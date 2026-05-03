@@ -12,7 +12,7 @@ function modelName(payload) {
 }
 
 function isReasoningModel(model) {
-  return /deepseek-v4/i.test(model) || /kimi-k2\.6/i.test(model);
+  return /deepseek-v4/i.test(model) || /kimi-k2\.6/i.test(model) || /^glm-5/i.test(model);
 }
 
 function extractThinking(content) {
@@ -79,8 +79,15 @@ function patchPayload(p) {
   // gsd-2 generates `reasoning_effort` for deepseek and `enable_thinking` for kimi;
   // we normalize the request parameter here.
   if (!next.thinking) {
-    const keepAll = /kimi-k2\.6/i.test(p.model || "") && hasReasoning;
-    next.thinking = keepAll ? { type: "enabled", keep: "all" } : { type: "enabled" };
+    const isKimi = /kimi-k2\.6/i.test(p.model || "");
+    const isGlm = /^glm-5/i.test(p.model || "");
+    if (isKimi && hasReasoning) {
+      next.thinking = { type: "enabled", keep: "all" };
+    } else if (isGlm) {
+      next.thinking = { type: "enabled", clear_thinking: false };
+    } else {
+      next.thinking = { type: "enabled" };
+    }
   }
 
   return next;
