@@ -16,7 +16,7 @@ function isReasoningModel(model) {
 }
 
 function injectReasoning(msg) {
-  if (msg.role === "user") return msg;
+  if (msg.role === "user" || msg.role === "toolResult") return msg;
   if ("reasoning_content" in msg) return msg;
 
   let reasoning = "";
