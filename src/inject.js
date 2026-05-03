@@ -33,7 +33,6 @@ export function loadHintSources(cwd) {
         }
       } catch (err) {
         errors.push(`project HINTS (${p}): ${err.message}`);
-        break; // only try the next candidate if current doesn't exist
       }
     }
   }
