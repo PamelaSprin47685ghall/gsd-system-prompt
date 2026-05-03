@@ -25,11 +25,25 @@ describe("before_provider_request", () => {
     assert.ok(Array.isArray(result.messages));
   });
 
-  test("DeepSeek：为所有非 user 消息注入 reasoning_content", () => {
+  test("deepseek-chat 不在补丁范围内", () => {
     const h = captureHandlers();
     const event = {
       payload: {
         model: "deepseek-chat",
+        messages: [
+          { role: "assistant", content: [{ type: "thinking", thinking: "x" }] },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal("reasoning_content" in result.messages[0], false);
+  });
+
+  test("DeepSeek v4：从无 thinking block 的 assistant 消息不注入 reasoning_content", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "deepseek-v4-pro",
         messages: [
           { role: "user", content: "hi" },
           { role: "assistant", content: [{ type: "text", text: "hello" }] },
@@ -37,18 +51,16 @@ describe("before_provider_request", () => {
       },
     };
     const result = h.before_provider_request(event);
-    // user message should NOT have reasoning_content
     assert.equal("reasoning_content" in result.messages[0], false);
-    // assistant message SHOULD have reasoning_content (empty string since no thinking block)
-    assert.equal("reasoning_content" in result.messages[1], true);
-    assert.equal(result.messages[1].reasoning_content, "");
+    assert.equal("reasoning_content" in result.messages[1], false);
+    assert.equal(result.thinking.type, "enabled");
   });
 
-  test("DeepSeek：从 thinking block 提取 reasoning_content", () => {
+  test("DeepSeek v4：从 thinking block 提取 reasoning_content 并从 content 移除", () => {
     const h = captureHandlers();
     const event = {
       payload: {
-        model: "deepseek-chat",
+        model: "deepseek-v4-pro",
         messages: [
           {
             role: "assistant",
@@ -62,28 +74,17 @@ describe("before_provider_request", () => {
     };
     const result = h.before_provider_request(event);
     assert.equal(result.messages[0].reasoning_content, "我需要思考一下这个问题");
-    assert.equal(result.messages[0].content[1].text, "答案是 42");
+    assert.equal(result.messages[0].content.length, 1);
+    assert.equal(result.messages[0].content[0].type, "text");
+    assert.equal(result.messages[0].content[0].text, "答案是 42");
+    assert.equal(result.thinking.type, "enabled");
   });
 
-  test("DeepSeek：无 thinking block 时 reasoning_content 为空", () => {
+  test("DeepSeek v4：跳过已有 reasoning_content 的消息", () => {
     const h = captureHandlers();
     const event = {
       payload: {
-        model: "deepseek-chat",
-        messages: [
-          { role: "assistant", content: [{ type: "text", text: "直接回答" }] },
-        ],
-      },
-    };
-    const result = h.before_provider_request(event);
-    assert.equal(result.messages[0].reasoning_content, "");
-  });
-
-  test("跳过已有 reasoning_content 的消息", () => {
-    const h = captureHandlers();
-    const event = {
-      payload: {
-        model: "deepseek-chat",
+        model: "deepseek-v4-pro",
         messages: [
           { role: "assistant", content: [], reasoning_content: "已有思考" },
         ],
@@ -100,13 +101,13 @@ describe("before_provider_request", () => {
       { role: "assistant", content: [{ type: "text", text: "hello" }] },
     ];
     const event = {
-      payload: { model: "deepseek-chat", messages: original },
+      payload: { model: "deepseek-v4-pro", messages: original },
     };
     h.before_provider_request(event);
     assert.equal("reasoning_content" in original[1], false);
   });
 
-  test("非 deepseek/k2.6 模型不注入 reasoning_content", () => {
+  test("非 deepseek-v4/kimi-k2.6 模型不注入 reasoning_content", () => {
     const h = captureHandlers();
     const event = {
       payload: {
@@ -128,8 +129,46 @@ describe("before_provider_request", () => {
 
   test("payload 不含 messages 或 input 时不报错", () => {
     const h = captureHandlers();
-    const event = { payload: { model: "deepseek-chat" } };
+    const event = { payload: { model: "deepseek-v4-pro" } };
     const result = h.before_provider_request(event);
-    assert.equal(result.model, "deepseek-chat");
+    assert.equal(result.model, "deepseek-v4-pro");
+  });
+
+  test("Kimi K2.6：提取 thinking block 并添加 thinking 参数", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "kimi-k2.6",
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "Kimi 思考中" },
+              { type: "text", text: "结果" },
+            ],
+          },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal(result.messages[0].reasoning_content, "Kimi 思考中");
+    assert.equal(result.messages[0].content.length, 1);
+    assert.equal(result.thinking.type, "enabled");
+  });
+
+  test("Kimi K2.6：历史含 reasoning_content 时启用 keep: all", () => {
+    const h = captureHandlers();
+    const event = {
+      payload: {
+        model: "kimi-k2.6",
+        messages: [
+          { role: "user", content: "hi" },
+          { role: "assistant", content: "", reasoning_content: "之前的思考" },
+        ],
+      },
+    };
+    const result = h.before_provider_request(event);
+    assert.equal(result.thinking.type, "enabled");
+    assert.equal(result.thinking.keep, "all");
   });
 });
