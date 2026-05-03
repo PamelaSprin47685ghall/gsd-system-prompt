@@ -68,7 +68,6 @@ export function buildStablePrompt(systemPrompt, cwd = process.cwd()) {
   // Strip [PROJECT CODEBASE — ...] section
   const lines = systemPrompt.split("\n");
   const kept = [];
-  let skipping = false;
 
   let inCodebaseBlock = false;
   let inCodebaseMapSection = false;
@@ -79,8 +78,13 @@ export function buildStablePrompt(systemPrompt, cwd = process.cwd()) {
       inCodebaseBlock = true;
       continue;
     }
-    if (inCodebaseBlock && line.startsWith("[") && !line.startsWith("[PROJECT CODEBASE —")) {
-      inCodebaseBlock = false;
+    if (inCodebaseBlock) {
+      const isEndOfBlock = (line.startsWith("[") && !line.startsWith("[PROJECT CODEBASE —")) || line.startsWith("## ");
+      if (isEndOfBlock) {
+        inCodebaseBlock = false;
+      } else {
+        continue;
+      }
     }
 
     // Track standalone ## Codebase Map sections

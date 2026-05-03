@@ -119,7 +119,7 @@ describe("buildStablePrompt", () => {
     assert.equal(first.systemPrompt, second.systemPrompt);
   });
 
-  test("剥掉多个 PROJECT CODEBASE 块及其内部的所有内容", () => {
+  test("CODEBASE 块后紧跟 ## 标题时应正确结束并保留该标题", () => {
     mockReadFile("global only");
 
     const input = [
@@ -132,14 +132,43 @@ describe("buildStablePrompt", () => {
       "This should be removed.",
       "",
       "## Subagent Model",
-      "This should be removed (first occurrence).",
+      "This should be kept.",
+      "",
+      "[NEXT SECTION]",
+      "This should also be kept.",
+    ].join("\n");
+
+    const result = buildStablePrompt(input);
+
+    assert.ok(!result.systemPrompt.includes("[PROJECT CODEBASE"));
+    assert.ok(!result.systemPrompt.includes("This should be removed"));
+    assert.ok(result.systemPrompt.includes("## Subagent Model"));
+    assert.ok(result.systemPrompt.includes("This should be kept."));
+    assert.ok(result.systemPrompt.includes("[NEXT SECTION]"));
+    assert.ok(result.systemPrompt.includes("This should also be kept."));
+  });
+
+  test("剥掉多个 PROJECT CODEBASE 块及其内部的所有内容", () => {
+    mockReadFile("global only");
+
+    const input = [
+      "[SYSTEM CONTEXT — GSD]",
+      "Some content here.",
+      "",
+      "[PROJECT CODEBASE — File structure]",
+      "# Codebase Map",
+      "Generated: 2026-05-03T04:27:35Z",
+      "This should be removed.",
+      "",
+      "### Some internal heading",
+      "This should also be removed.",
       "",
       "[PROJECT CODEBASE — Old duplicate]",
       "# Codebase Map",
       "Old content that should be removed.",
       "",
-      "## Subagent Model",
-      "This should be removed (duplicate).",
+      "### Another internal heading",
+      "This should also be removed (duplicate).",
       "",
       "[NEXT SECTION]",
       "This should be kept.",
@@ -150,11 +179,8 @@ describe("buildStablePrompt", () => {
     // 验证所有 CODEBASE 块都被剥离
     assert.ok(!result.systemPrompt.includes("[PROJECT CODEBASE"));
     assert.ok(!result.systemPrompt.includes("This should be removed"));
-    
-    // 验证 Subagent Model 不出现（因为它在 CODEBASE 块内）
-    const subagentCount = result.systemPrompt.split("\n").filter(l => l === "## Subagent Model").length;
-    assert.equal(subagentCount, 0, "Subagent Model should not appear");
-    
+    assert.ok(!result.systemPrompt.includes("This should also be removed"));
+
     // 验证其他内容保留
     assert.ok(result.systemPrompt.includes("[SYSTEM CONTEXT — GSD]"));
     assert.ok(result.systemPrompt.includes("[NEXT SECTION]"));
