@@ -79,7 +79,7 @@ export function buildStablePrompt(systemPrompt, cwd = process.cwd()) {
       continue;
     }
     if (inCodebaseBlock) {
-      const isEndOfBlock = (line.startsWith("[") && !line.startsWith("[PROJECT CODEBASE —")) || line.startsWith("## ");
+      const isEndOfBlock = (line.startsWith("[") && /^\[[^\]]+ —/.test(line) && !line.startsWith("[PROJECT CODEBASE —")) || line.startsWith("## ");
       if (isEndOfBlock) {
         inCodebaseBlock = false;
       } else {
