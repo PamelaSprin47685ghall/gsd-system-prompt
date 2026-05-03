@@ -70,15 +70,30 @@ export function buildStablePrompt(systemPrompt, cwd = process.cwd()) {
   const kept = [];
   let skipping = false;
 
+  let inCodebaseBlock = false;
+  let inCodebaseMapSection = false;
+
   for (const line of lines) {
-    if (line.startsWith("[PROJECT CODEBASE —") || line === "## Codebase Map") {
-      skipping = true;
+    // Track [PROJECT CODEBASE] blocks
+    if (line.startsWith("[PROJECT CODEBASE —")) {
+      inCodebaseBlock = true;
       continue;
     }
-    if (skipping && (line.startsWith("[") || line.startsWith("## "))) {
-      skipping = false;
+    if (inCodebaseBlock && line.startsWith("[") && !line.startsWith("[PROJECT CODEBASE —")) {
+      inCodebaseBlock = false;
     }
-    if (!skipping) {
+
+    // Track standalone ## Codebase Map sections
+    if (!inCodebaseBlock && line === "## Codebase Map") {
+      inCodebaseMapSection = true;
+      continue;
+    }
+    if (inCodebaseMapSection && line.startsWith("## ") && line !== "## Codebase Map") {
+      inCodebaseMapSection = false;
+    }
+
+    // Keep line if not in either skip zone
+    if (!inCodebaseBlock && !inCodebaseMapSection) {
       kept.push(line);
     }
   }
