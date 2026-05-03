@@ -124,10 +124,10 @@ export default function systemPromptPlugin(pi) {
     const model = modelName(p);
     if (model && isReasoningModel(model)) {
       const handled = patchPayload(p);
-      return handled !== p ? handled : p;
+      return handled !== p ? handled : undefined;
     }
 
-    return p;
+    return undefined;
   });
 }
 
