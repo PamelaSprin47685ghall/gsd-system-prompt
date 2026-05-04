@@ -104,38 +104,44 @@ const registeredPluginApis = new WeakSet()
 
 export default function systemPromptPlugin(pi) {
   if (registeredPluginApis.has(pi)) return
-  registeredPluginApis.add(pi)
 
-  /* before_agent_start ── strip CODEBASE, inject HINTS */
-  pi.on('before_agent_start', (event, ctx) => {
-    const sp = event?.systemPrompt
-    if (typeof sp !== 'string') return
+  try {
+    /* before_agent_start ── strip CODEBASE, inject HINTS */
+    pi.on('before_agent_start', (event, ctx) => {
+      const sp = event?.systemPrompt
+      if (typeof sp !== 'string') return
 
-    const result = buildStablePrompt(sp, ctx?.cwd)
-    if (result.systemPrompt === sp) return
+      const result = buildStablePrompt(sp, ctx?.cwd)
+      if (result.systemPrompt === sp) return
 
-    if (result.errors.length > 0 && ctx?.ui) {
-      ctx.ui.notify(
-        `pruner: HINTS 加载警告 — ${result.errors.join('; ')}`,
-        'warning',
-      )
-    }
+      if (result.errors.length > 0 && ctx?.ui) {
+        ctx.ui.notify(
+          `pruner: HINTS 加载警告 — ${result.errors.join('; ')}`,
+          'warning',
+        )
+      }
 
-    return { systemPrompt: result.systemPrompt }
-  })
+      return { systemPrompt: result.systemPrompt }
+    })
 
-  /* before_provider_request ── reasoning_content fix for deepseek/k2.6 */
-  pi.on('before_provider_request', (event) => {
-    const p = event?.payload
-    if (!p) return undefined
+    /* before_provider_request ── reasoning_content fix for deepseek/k2.6 */
+    pi.on('before_provider_request', (event) => {
+      const p = event?.payload
+      if (!p) return undefined
 
-    const model = modelName(p)
-    if (model && isReasoningModel(model)) {
-      return patchPayload(p)
-    }
+      const model = modelName(p)
+      if (model && isReasoningModel(model)) {
+        return patchPayload(p)
+      }
 
-    return p
-  })
+      return p
+    })
+
+    registeredPluginApis.add(pi)
+  } catch (error) {
+    registeredPluginApis.delete(pi)
+    throw error
+  }
 }
 
 /* ── named exports ── */
